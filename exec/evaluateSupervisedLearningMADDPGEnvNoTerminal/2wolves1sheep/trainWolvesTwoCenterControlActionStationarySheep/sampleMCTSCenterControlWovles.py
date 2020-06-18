@@ -26,8 +26,8 @@ from exec.trajectoriesSaveLoad import GetSavePath, readParametersFromDf, conditi
 def main():
     startTime = time.time()
 
-    DEBUG = 0
-    renderOn = 0
+    DEBUG = 1
+    renderOn = 1
     if DEBUG:
         parametersForTrajectoryPath = {}
         startSampleIndex = 5

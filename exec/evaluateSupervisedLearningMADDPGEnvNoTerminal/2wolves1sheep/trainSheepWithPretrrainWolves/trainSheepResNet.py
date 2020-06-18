@@ -201,7 +201,7 @@ def trainOneCondition(manipulatedVariables):
 def main():
     manipulatedVariables = OrderedDict()
     manipulatedVariables['depth'] = [9]
-    manipulatedVariables['miniBatchSize'] = [2]
+    manipulatedVariables['miniBatchSize'] = [256]
     manipulatedVariables['learningRate'] = [1e-4]
 
     productedValues = it.product(*[[(key, value) for value in values] for key, values in manipulatedVariables.items()])

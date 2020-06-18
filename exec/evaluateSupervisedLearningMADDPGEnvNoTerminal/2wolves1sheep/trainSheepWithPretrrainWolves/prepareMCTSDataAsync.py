@@ -36,7 +36,7 @@ def main():
     pathParameters = {'agentId': sheepId}
 
     startTime = time.time()
-    numTrajectories = 3000
+    numTrajectories = 1000
     # generate and load trajectories before train parallelly
     sampleTrajectoryFileName = 'sampleMCTSSheep.py'
 

@@ -146,7 +146,7 @@ def main():
 
 # wolf NN Policy
         NNModelSaveExtension = ''
-        wolfTrainedModelPath = os.path.join(dirName, '..', '..', '..', '..', 'data', 'MADDPG2wolves1sheep', 'trainWolvesTwoCenterControlAction', 'trainedResNNModels', 'agentId=1_killzoneRadius=50_maxRunningSteps=50_numSimulations=250_numTrainStepEachIteration=1_numTrajectoriesPerIteration=1')
+        wolfTrainedModelPath = os.path.join(dirName, '..', '..', '..', '..', 'data', 'MADDPG2wolves1sheep', 'trainWolvesTwoCenterControlAction', 'trainedResNNModels', 'agentId=1_depth=9_learningRate=0.0001_maxRunningSteps=50_miniBatchSize=256_numSimulations=250_trainSteps=50000')
 
         depth = 9
         resBlockSize = 2
@@ -180,7 +180,7 @@ def main():
 
         # random rollout policy
         def rolloutPolicy(
-            state): return [sampleFromDistribution(sheepPolicy(state)), sheepActionSpace[np.random.choice(range(numSheepActionSpace))]]
+            state): return [sheepActionSpace[np.random.choice(range(numSheepActionSpace))],sampleFromDistribution(wolfPolicy(state))]
 
         rolloutHeuristic = lambda state: 0
         maxRolloutSteps = 15
