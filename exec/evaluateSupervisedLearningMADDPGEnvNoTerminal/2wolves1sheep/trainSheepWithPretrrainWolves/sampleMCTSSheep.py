@@ -23,6 +23,7 @@ from src.episode import Render, ForwardOneStep, SampleTrajectory, SampleTrajecto
 from exec.trajectoriesSaveLoad import GetSavePath, readParametersFromDf, conditionDfFromParametersDict, LoadTrajectories, SaveAllTrajectories, \
     GenerateAllSampleIndexSavePaths, saveToPickle, loadFromPickle
 
+
 def main():
     startTime = time.time()
 
@@ -32,7 +33,7 @@ def main():
         parametersForTrajectoryPath = {}
         startSampleIndex = 5
         endSampleIndex = 8
-        agentId = 1
+        agentId = 0
         parametersForTrajectoryPath['sampleIndex'] = (startSampleIndex, endSampleIndex)
     else:
         parametersForTrajectoryPath = json.loads(sys.argv[1])
@@ -43,7 +44,7 @@ def main():
 
     # check file exists or not
     dirName = os.path.dirname(__file__)
-    trajectoriesSaveDirectory = os.path.join(dirName, '..', '..', '..', '..', 'data', 'MADDPG2wolves1sheep', 'trainWolvesTwoCenterControlAction', 'trajectories')
+    trajectoriesSaveDirectory = os.path.join(dirName, '..', '..', '..', '..', 'data', 'MADDPG2wolves1sheep', 'trainSheepWithPretrrainWolves', 'trajectories')
     if not os.path.exists(trajectoriesSaveDirectory):
         os.makedirs(trajectoriesSaveDirectory)
 
@@ -58,7 +59,7 @@ def main():
 
     if not os.path.isfile(trajectorySavePath):
 
-    # env MDP
+        # env MDP
         sheepsID = [0]
         wolvesID = [1, 2]
         blocksID = []
@@ -78,9 +79,9 @@ def main():
         wolfMaxSpeed = 1.0 * 1
         blockMaxSpeed = None
 
-        entitiesSizeList = [sheepSize] * numSheeps + [wolfSize]* numWolves + [blockSize]* numBlocks
-        entityMaxSpeedList = [sheepMaxSpeed] * numSheeps + [wolfMaxSpeed]* numWolves + [blockMaxSpeed]* numBlocks
-        entitiesMovableList = [True]* numAgents + [False] * numBlocks
+        entitiesSizeList = [sheepSize] * numSheeps + [wolfSize] * numWolves + [blockSize] * numBlocks
+        entityMaxSpeedList = [sheepMaxSpeed] * numSheeps + [wolfMaxSpeed] * numWolves + [blockMaxSpeed] * numBlocks
+        entitiesMovableList = [True] * numAgents + [False] * numBlocks
         massList = [1.0] * numEntities
 
         centralControlId = 1
@@ -95,13 +96,13 @@ def main():
         interpolateState = TransitMultiAgentChasing(numEntities, reshapeAction, applyActionForce, applyEnvironForce, integrateState)
 
         numFramesToInterpolate = 1
+
         def transit(state, action):
             for frameIndex in range(numFramesToInterpolate):
                 nextState = interpolateState(state, action)
                 action = np.array([(0, 0)] * numAgents)
                 state = nextState
             return nextState
-
 
         isTerminal = lambda state: False
 
@@ -141,9 +142,20 @@ def main():
         sharedWidths = [128]
         actionLayerWidths = [128]
         valueLayerWidths = [128]
-        generateSheepModel = GenerateModel(numStateSpace, numSheepActionSpace, regularizationFactor)
+        generateWolvesModel = GenerateModel(numStateSpace, numWolvesActionSpace, regularizationFactor)
 
-        sheepPolicy = lambda state: {(0, 0): 1}
+# wolf NN Policy
+        NNModelSaveExtension = ''
+        wolfTrainedModelPath = os.path.join(dirName, '..', '..', '..', '..', 'data', 'MADDPG2wolves1sheep', 'trainWolvesTwoCenterControlAction', 'trainedResNNModels', 'agentId=1_killzoneRadius=50_maxRunningSteps=50_numSimulations=250_numTrainStepEachIteration=1_numTrajectoriesPerIteration=1')
+
+        depth = 9
+        resBlockSize = 2
+        dropoutRate = 0.0
+        initializationMethod = 'uniform'
+        initWolfNNModel = generateWolvesModel(sharedWidths * depth, actionLayerWidths, valueLayerWidths, resBlockSize, initializationMethod, dropoutRate)
+
+        wolfTrainedModel = restoreVariables(initWolfNNModel, wolfTrainedModelPath)
+        wolfPolicy = ApproximatePolicy(wolfTrainedModel, wolvesActionSpace)
 
     # MCTS
         cInit = 1
@@ -152,29 +164,29 @@ def main():
         selectChild = SelectChild(calculateScore)
 
         # prior
-        getActionPrior = lambda state: {action: 1 / len(wolvesActionSpace) for action in wolvesActionSpace}
+        getActionPrior = lambda state: {action: 1 / len(sheepActionSpace) for action in sheepActionSpace}
 
     # load chase nn policy
         chooseActionInMCTS = sampleFromDistribution
 
-        def wolvesTransit(state, action): return transit(
-            state, [chooseActionInMCTS(sheepPolicy(state)), action])
+        def sheepTransit(state, action): return transit(
+            state, [action, chooseActionInMCTS(wolfPolicy(state))])
 
         # initialize children; expand
         initializeChildren = InitializeChildren(
-            wolvesActionSpace, wolvesTransit, getActionPrior)
+            sheepActionSpace, sheepTransit, getActionPrior)
         isTerminal = lambda state: False
         expand = Expand(isTerminal, initializeChildren)
 
         # random rollout policy
         def rolloutPolicy(
-            state): return [sampleFromDistribution(sheepPolicy(state)), wolvesActionSpace[np.random.choice(range(numWolvesActionSpace))]]
+            state): return [sampleFromDistribution(sheepPolicy(state)), sheepActionSpace[np.random.choice(range(numSheepActionSpace))]]
 
         rolloutHeuristic = lambda state: 0
         maxRolloutSteps = 15
-        rollout = RollOut(rolloutPolicy, maxRolloutSteps, transit, rewardWolf, isTerminal, rolloutHeuristic)
+        rollout = RollOut(rolloutPolicy, maxRolloutSteps, transit, rewardSheep, isTerminal, rolloutHeuristic)
 
-        wolfPolicy = MCTS(numSimulations, selectChild, expand, rollout, backup, establishSoftmaxActionDist)
+        sheepPolicy = MCTS(numSimulations, selectChild, expand, rollout, backup, establishSoftmaxActionDist)
 
         # All agents' policies
         policy = lambda state: [sheepPolicy(state), wolfPolicy(state)]
@@ -185,16 +197,16 @@ def main():
             action = [chooseAction(actionDist) for actionDist, chooseAction in zip(actionDists, chooseActionList)]
             return action
 
-        render = None
-        forwardOneStep = ForwardOneStep(transit, rewardWolf)
+        render = lambda state: None
+        forwardOneStep = ForwardOneStep(transit, rewardSheep)
         sampleTrajectory = SampleTrajectoryWithRender(maxRunningSteps, isTerminal, resetState, forwardOneStep, render, renderOn)
 
         trajectories = [sampleTrajectory(sampleAction) for sampleIndex in range(startSampleIndex, endSampleIndex)]
         print([len(traj) for traj in trajectories])
         saveToPickle(trajectories, trajectorySavePath)
 
-
     endTime = time.time()
+
     #print("Time taken {} seconds".format((endTime - startTime)))
 if __name__ == '__main__':
     main()
