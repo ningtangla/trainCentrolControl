@@ -140,3 +140,20 @@ class ConvertTrajectoryToStateDf:
         stateDf = emptyDf.groupby(list(indexLevels.keys())).apply(extractTrajectoryInformation)
 
         return stateDf
+
+class DeleteUsedModel:
+    def __init__(self,modelMemorySize, modelSaveFrequency,generatetoDeleteNNModelPathList):
+        self.generatetoDeleteNNModelPathList=generatetoDeleteNNModelPathList
+        self.modelMemorySize=modelMemorySize
+        self.modelSaveFrequency=modelSaveFrequency
+
+    def __call__(self,iterationIndex,agentId):
+        if (iterationIndex-self.modelMemorySize) % self.modelSaveFrequency != 0 and iterationIndex>=self.modelMemorySize:
+                toDeleteNNModelPathParameters={'iterationIndex': iterationIndex-self.modelMemorySize, 'agentId': agentId}
+                toDeleteModelPathList = [generatetoDeleteNNModelPath(toDeleteNNModelPathParameters) for generatetoDeleteNNModelPath in self.generatetoDeleteNNModelPathList ]
+                for toDeleteModelPath in toDeleteModelPathList:
+                    if os.path.isfile(toDeleteModelPath):
+                        os.remove(toDeleteModelPath)
+                        print('delete',toDeleteModelPath)
+                    else:
+                        print('no such file',toDeleteModelPath)

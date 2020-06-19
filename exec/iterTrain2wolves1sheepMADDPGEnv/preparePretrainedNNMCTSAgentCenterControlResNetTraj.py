@@ -3,7 +3,7 @@ import sys
 import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 DIRNAME = os.path.dirname(__file__)
-sys.path.append(os.path.join(DIRNAME, '..', '..', '..'))
+sys.path.append(os.path.join(DIRNAME, '..', '..'))
 
 import json
 import numpy as np
@@ -14,12 +14,13 @@ import pygame as pg
 from pygame.color import THECOLORS
 
 from src.constrainedChasingEscapingEnv.envMADDPG import *
-from src.constrainedChasingEscapingEnv.envNoPhysics import TransiteForNoPhysicsWithCenterControlAction, Reset, IsTerminal, StayInBoundaryByReflectVelocity, UnpackCenterControlAction, TransitWithInterpolateStateWithCenterControlAction
 from src.constrainedChasingEscapingEnv.reward import RewardFunctionCompete
 from exec.trajectoriesSaveLoad import GetSavePath, readParametersFromDf, conditionDfFromParametersDict, LoadTrajectories, SaveAllTrajectories, \
     GenerateAllSampleIndexSavePaths, saveToPickle, loadFromPickle
 from src.neuralNetwork.policyValueResNet import GenerateModel, Train, saveVariables, sampleData, ApproximateValue, \
     ApproximatePolicy, restoreVariables
+from src.constrainedChasingEscapingEnv.envNoPhysics import UnpackCenterControlAction
+
 from src.constrainedChasingEscapingEnv.state import GetAgentPosFromState
 from src.neuralNetwork.trainTools import CoefficientCotroller, TrainTerminalController, TrainReporter, LearningRateModifier
 from src.replayBuffer import SampleBatchFromBuffer, SaveToBuffer
@@ -27,11 +28,22 @@ from exec.preProcessing import AccumulateMultiAgentRewards, AddValuesToTrajector
     ActionToOneHot, ProcessTrajectoryForPolicyValueNet
 from src.mathTools.distribution import sampleFromDistribution, maxFromDistribution, SoftDistribution, SoftMax
 from src.algorithms.mcts import ScoreChild, SelectChild, InitializeChildren, StochasticMCTS, backup, establishPlainActionDistFromMultipleTrees, Expand
-from exec.trainMCTSNNIteratively.valueFromNode import EstimateValueFromNode
 from src.constrainedChasingEscapingEnv.policies import stationaryAgentPolicy, HeatSeekingContinuesDeterministicPolicy
 from src.episode import Render, ForwardMultiAgentsOneStep, SampleTrajectory, SampleTrajectoryWithRender
 from exec.parallelComputing import GenerateTrajectoriesParallel
 
+class EstimateValueFromNode:
+    def __init__(self, terminalReward, isTerminal, getStateFromNode, getApproximateValue):
+        self.terminalReward = terminalReward
+        self.isTerminal = isTerminal
+        self.getStateFromNode = getStateFromNode
+        self.getApproximateValue = getApproximateValue
+    def __call__(self, node):
+        state = self.getStateFromNode(node)
+        if self.isTerminal(state):
+            return self.terminalReward
+        else:
+            return self.getApproximateValue(state)
 
 class ComposeMultiAgentTransitInSingleAgentMCTS:
     def __init__(self, chooseAction):
@@ -94,8 +106,8 @@ class PrepareMultiAgentPolicy:
 
 
 def main():
-    DEBUG = 0
-    renderOn = 0
+    DEBUG = 1
+    renderOn = 1
 
     if DEBUG:
         parametersForTrajectoryPath = {}
@@ -117,7 +129,7 @@ def main():
 
     # check file exists or not
     dirName = os.path.dirname(__file__)
-    trajectoriesSaveDirectory = os.path.join(dirName, '..', '..', '..', 'data', 'iterTrain2wolves1sheepMADDPGEnv', 'trajectories')
+    trajectoriesSaveDirectory = os.path.join(dirName, '..', '..',  'data', 'iterTrain2wolves1sheepMADDPGEnv', 'trajectories')
     if not os.path.exists(trajectoriesSaveDirectory):
         os.makedirs(trajectoriesSaveDirectory)
 
@@ -185,7 +197,7 @@ def main():
         rewardWolf = RewardCentralControlPunishBond(wolvesID, sheepsID, entitiesSizeList, getPosFromAgentState, isCollision, punishForOutOfBound, collisonRewardWolf)
         collisonRewardSheep = -1
         rewardSheep = RewardCentralControlPunishBond(sheepsID, wolvesID, entitiesSizeList, getPosFromAgentState, isCollision, punishForOutOfBound, collisonRewardSheep)
-
+        terminalRewardList = [collisonRewardSheep,collisonRewardWolf]
         rewardMultiAgents = [rewardSheep, rewardWolf]
 
         resetState = ResetMultiAgentChasing(numAgents, numBlocks)
@@ -227,19 +239,20 @@ def main():
         resBlockSize = 2
         dropoutRate = 0.0
         initializationMethod = 'uniform'
+
+        sheepId,wolvesId = [0,1]
         trainableAgentIds = [sheepId, wolvesId]
 
         multiAgentNNmodel = [generateModel(sharedWidths * depth, actionLayerWidths, valueLayerWidths, resBlockSize, initializationMethod, dropoutRate) for depth, generateModel in zip(depthList, generateModelList)]
 
         # restorePretrainModel
-        sheepPreTrainModelPath = os.path.join(dirName, '..', '..', '..', '..', 'data', 'MADDPG2wolves1sheep', 'trainWolvesTwoCenterControlAction', 'trainedResNNModels', 'agentId=1_depth=9_learningRate=0.0001_maxRunningSteps=50_miniBatchSize=256_numSimulations=250_trainSteps=50000')
+        sheepPreTrainModelPath = os.path.join(dirName, '..', '..', 'data', 'MADDPG2wolves1sheep', 'trainSheepWithPretrrainWolves', 'trainedResNNModels', 'agentId=0_depth=9_learningRate=0.0001_maxRunningSteps=50_miniBatchSize=256_numSimulations=250_trainSteps=50000')
 
-        wolvesPreTrainModelPath = os.path.join(dirName, '..', '..', '..', '..', 'data', 'MADDPG2wolves1sheep', 'trainSheepWithPretrrainWolves', 'trainedResNNModels', 'agentId=1_depth=9_learningRate=0.0001_maxRunningSteps=50_miniBatchSize=256_numSimulations=250_trainSteps=50000')
+        wolvesPreTrainModelPath = os.path.join(dirName, '..',  '..', 'data', 'MADDPG2wolves1sheep', 'trainWolvesTwoCenterControlAction', 'trainedResNNModels', 'agentId=1_depth=9_learningRate=0.0001_maxRunningSteps=50_miniBatchSize=256_numSimulations=250_trainSteps=50000')
 
         pretrainModelPathList = [sheepPreTrainModelPath, wolvesPreTrainModelPath]
 
         for agentId in trainableAgentIds:
-
             restoredNNModel = restoreVariables(multiAgentNNmodel[agentId], pretrainModelPathList[agentId])
             multiAgentNNmodel[agentId] = restoredNNModel
 
@@ -261,28 +274,15 @@ def main():
         composeSingleAgentGuidedMCTS = ComposeSingleAgentGuidedMCTS(numTree, numSimulations, actionSpaceList, terminalRewardList, selectChild, isTerminal, transit, getStateFromNode, getApproximatePolicy, getApproximateValue, composeMultiAgentTransitInSingleAgentMCTS)
         prepareMultiAgentPolicy = PrepareMultiAgentPolicy(composeSingleAgentGuidedMCTS, otherAgentApproximatePolicy, trainableAgentIds)
 
-        # load model
-        NNModelSaveExtension = ''
-        NNModelSaveDirectory = os.path.join(dirName, '..', '..', '..', 'data', 'iterTrain2wolves1sheepMADDPGEnv', 'NNModelRes')
-        if not os.path.exists(NNModelSaveDirectory):
-            os.makedirs(NNModelSaveDirectory)
-
-        generateNNModelSavePath = GetSavePath(NNModelSaveDirectory, NNModelSaveExtension, fixedParameters)
-
-        for agentId in trainableAgentIds:
-            modelPath = generateNNModelSavePath({'iterationIndex': iterationIndex - 1, 'agentId': agentId, 'numTrajectoriesPerIteration': numTrajectoriesPerIteration, 'numTrainStepEachIteration': numTrainStepEachIteration})
-            restoredNNModel = restoreVariables(multiAgentNNmodel[agentId], modelPath)
-            multiAgentNNmodel[agentId] = restoredNNModel
-
-        policy = prepareMultiAgentPolicy(multiAgentNNmodel)
+        multiAgentPolicy = prepareMultiAgentPolicy(multiAgentNNmodel)
         chooseActionList = [maxFromDistribution, maxFromDistribution]
 
         def sampleAction(state):
-            actionDists = [sheepPolicy(state), wolfPolicy(state)]
+            actionDists = multiAgentPolicy(state)
             action = [chooseAction(actionDist) for actionDist, chooseAction in zip(actionDists, chooseActionList)]
             return action
 
-        render = None
+        render = lambda state: None
         forwardOneStep = ForwardMultiAgentsOneStep(transit, rewardMultiAgents)
         sampleTrajectory = SampleTrajectoryWithRender(maxRunningSteps, isTerminal, resetState, forwardOneStep, render, renderOn)
 

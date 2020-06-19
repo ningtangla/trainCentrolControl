@@ -3,7 +3,7 @@ import sys
 import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 DIRNAME = os.path.dirname(__file__)
-sys.path.append(os.path.join(DIRNAME, '..', '..', '..'))
+sys.path.append(os.path.join(DIRNAME,  '..', '..'))
 import json
 import numpy as np
 from collections import OrderedDict
@@ -12,7 +12,7 @@ import pathos.multiprocessing as mp
 import itertools as it
 
 from src.constrainedChasingEscapingEnv.envMADDPG import *
-from src.constrainedChasingEscapingEnv.envNoPhysics import IsTerminal
+from src.constrainedChasingEscapingEnv.envNoPhysics import UnpackCenterControlAction
 from src.constrainedChasingEscapingEnv.reward import RewardFunctionCompete
 from exec.trajectoriesSaveLoad import GetSavePath, readParametersFromDf, conditionDfFromParametersDict, LoadTrajectories, SaveAllTrajectories, \
     GenerateAllSampleIndexSavePaths, saveToPickle, loadFromPickle, DeleteUsedModel
@@ -68,6 +68,10 @@ def iterateTrainOneCondition(parameterOneCondition):
     numOfAgent = 2
     agentIds = list(range(numOfAgent))
 
+    maxRunningSteps = 50
+    numSimulations = 250
+    killzoneRadius = 50
+    fixedParameters = {'maxRunningSteps': maxRunningSteps, 'numSimulations': numSimulations, 'killzoneRadius': killzoneRadius}
 # env MDP
     sheepsID = [0]
     wolvesID = [1, 2]
@@ -138,7 +142,7 @@ def iterateTrainOneCondition(parameterOneCondition):
     wolfActionOneSpace = list(map(tuple, np.array(wolfActionSpace) * predatorPowerRatio))
     wolfActionTwoSpace = list(map(tuple, np.array(wolfActionSpace) * predatorPowerRatio))
 
-    wolvesActionSpace = list(product(wolfActionOneSpace, wolfActionTwoSpace))
+    wolvesActionSpace = list(it.product(wolfActionOneSpace, wolfActionTwoSpace))
 
     actionSpaceList = [sheepActionSpace, wolvesActionSpace]
 
@@ -217,11 +221,11 @@ def iterateTrainOneCondition(parameterOneCondition):
 
     trajectorySaveExtension = '.pickle'
     NNModelSaveExtension = ''
-    trajectoriesSaveDirectory = os.path.join(dirName, '..', '..', '..', 'data', 'iterTrain2wolves1sheepMADDPGEnv', 'trajectories')
+    trajectoriesSaveDirectory = os.path.join(dirName, '..', '..', 'data', 'iterTrain2wolves1sheepMADDPGEnv', 'trajectories')
     if not os.path.exists(trajectoriesSaveDirectory):
         os.makedirs(trajectoriesSaveDirectory)
 
-    NNModelSaveDirectory = os.path.join(dirName, '..', '..', '..', 'data', 'iterTrain2wolves1sheepMADDPGEnv', 'NNModelRes')
+    NNModelSaveDirectory = os.path.join(dirName, '..', '..', 'data', 'iterTrain2wolves1sheepMADDPGEnv', 'NNModelRes')
     if not os.path.exists(NNModelSaveDirectory):
         os.makedirs(NNModelSaveDirectory)
 
@@ -244,12 +248,14 @@ def iterateTrainOneCondition(parameterOneCondition):
     trainOneAgent = TrainOneAgent(numTrainStepEachIteration, numTrajectoriesToStartTrain, processTrajectoryForPolicyValueNets, sampleBatchFromBuffer, trainNN)
 
     # restorePretrainModel
-    sheepPreTrainModelPath = os.path.join(dirName, '..', '..', '..', '..', 'data', 'MADDPG2wolves1sheep', 'trainWolvesTwoCenterControlAction', 'trainedResNNModels', 'agentId=1_depth=9_learningRate=0.0001_maxRunningSteps=50_miniBatchSize=256_numSimulations=250_trainSteps=50000')
+    sheepPreTrainModelPath = os.path.join(dirName, '..', '..',  'data', 'MADDPG2wolves1sheep', 'trainSheepWithPretrrainWolves', 'trainedResNNModels', 'agentId=0_depth=9_learningRate=0.0001_maxRunningSteps=50_miniBatchSize=256_numSimulations=250_trainSteps=50000')
 
-    wolvesPreTrainModelPath = os.path.join(dirName, '..', '..', '..', '..', 'data', 'MADDPG2wolves1sheep', 'trainSheepWithPretrrainWolves', 'trainedResNNModels', 'agentId=1_depth=9_learningRate=0.0001_maxRunningSteps=50_miniBatchSize=256_numSimulations=250_trainSteps=50000')
+    wolvesPreTrainModelPath = os.path.join(dirName, '..', '..',  'data', 'MADDPG2wolves1sheep', 'trainWolvesTwoCenterControlAction', 'trainedResNNModels', 'agentId=1_depth=9_learningRate=0.0001_maxRunningSteps=50_miniBatchSize=256_numSimulations=250_trainSteps=50000')
 
     pretrainModelPathList = [sheepPreTrainModelPath, wolvesPreTrainModelPath]
 
+
+    sheepId, wolvesId = [0,1]
     trainableAgentIds = [sheepId, wolvesId]
     for agentId in trainableAgentIds:
 
@@ -293,7 +299,7 @@ def iterateTrainOneCondition(parameterOneCondition):
     replayBuffer = saveToBuffer(replayBuffer, preProcessedRestoredTrajectories)
 
     modelMemorySize = 5
-    modelSaveFrequency = 100
+    modelSaveFrequency = 50
     deleteUsedModel = DeleteUsedModel(modelMemorySize, modelSaveFrequency, generatetoDeleteNNModelPathList)
     numIterations = 10000
     for iterationIndex in range(restoredIteration + 1, numIterations):
@@ -348,7 +354,7 @@ def main():
     generateTrajectoriesParallel = GenerateTrajectoriesParallel(sampleTrajectoryFileName, numTrajectoriesToStartTrain, numCmdList)
     iterationBeforeTrainIndex = 0
     trajectoryBeforeTrainPathParamters = {'iterationIndex': iterationBeforeTrainIndex}
-    prepareBefortrainData = True
+    prepareBefortrainData = 1
     if prepareBefortrainData:
         cmdList = generateTrajectoriesParallel(trajectoryBeforeTrainPathParamters)
 
