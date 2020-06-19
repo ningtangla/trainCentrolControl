@@ -8,19 +8,17 @@ class AccumulateRewards:
 
     def __call__(self, trajectory):
         rewards = [r for s, a, sn, r in trajectory]
-        #print(max(rewards), rewards.index(max(rewards)))
         accumulateReward = lambda accumulatedReward, reward: self.decay * accumulatedReward + reward
         accumulatedRewards = np.array([reduce(accumulateReward, reversed(rewards[TimeT:])) for TimeT in range(len(rewards))])
         return accumulatedRewards
 
 
 class AccumulateMultiAgentRewards:
-    def __init__(self, decay, rewardFunctions):
+    def __init__(self, decay):
         self.decay = decay
-        self.rewardFunctions = rewardFunctions
 
     def __call__(self, trajectory):
-        multiAgentRewards = [[rewardFunction(state, action) for state, action, actionDist in trajectory] for rewardFunction in self.rewardFunctions]
+        multiAgentRewards = [r for s, a, sn, r in trajectory]
         accumulateReward = lambda accumulatedReward, reward: self.decay * accumulatedReward + reward
         multiAgentRewardsAccumulatedRewards = np.array([[reduce(accumulateReward, reversed(rewards[TimeT:])) for TimeT in range(len(rewards))]
                                                         for rewards in multiAgentRewards])

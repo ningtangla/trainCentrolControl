@@ -15,6 +15,18 @@ class ForwardOneStep:
         return (state, action, nextState, reward)
 
 
+class ForwardMultiAgentsOneStep:
+    def __init__(self, transitionFunction, rewardFunctionList):
+        self.transitionFunction = transitionFunction
+        self.rewardFunctionList = rewardFunctionList
+
+    def __call__(self, state, sampleAction):
+        action = sampleAction(state)
+        nextState = self.transitionFunction(state, action)
+        rewards = [rewardFunction(state, action, nextState) for rewardFunction in self.rewardFunctionList]
+        return (state, action, nextState, rewards)
+
+
 class SampleTrajectory:
     def __init__(self, maxRunningSteps, isTerminal, resetState, forwardOneStep):
         self.maxRunningSteps = maxRunningSteps
@@ -94,4 +106,3 @@ class Render():
             if self.saveImage == True:
                 filenameList = os.listdir(self.saveImageDir)
                 pg.image.save(self.screen, self.saveImageDir + '/' + str(len(filenameList)) + '.png')
-
